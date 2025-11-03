@@ -16,7 +16,7 @@ def inventory_check():
 
     JDBC_DRIVER_PATH = f"{PROJECT_ROOT}/config/SparkJDBC42.jar"
 
-    SQL_PATH = f"{PROJECT_ROOT}/config/inventory_check2.sql"
+    SQL_PATH = f"{PROJECT_ROOT}/config/inventory_check3.sql"
 
     connection_properties = {
         "oracle.jdbc.authenticationMethod": AUTH_TYPE, 
@@ -40,11 +40,12 @@ def inventory_check():
         # cursor.execute("SELECT count(*) FROM fdi_idl_catalog.default.dw_inventory_item_d")
         with open(SQL_PATH, "r") as f:
             sql_script = f.read()
-        for statement in sql_script.split(';'):
-            if statement.strip(): # Avoid empty statements
-                # cursor.execute(statement)
-                item_number = "AS6647431"
-                cursor.execute(sql_script, (item_number,))
+        item_number = "AS6647431"
+        bu = "US1 Business Unit"
+        parameters = [
+            (item_number, bu)
+        ]
+        cursor.execute(sql_script, parameters[0])
         results = cursor.fetchall()
         print("AIDP Output")
         print(results)
