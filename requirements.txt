@@ -1,6 +1,8 @@
 #requirements
 
 wayflowcore
+jaydebeapi
+jpype1
 yfinance
 asyncio
 langchain-mcp-adapters
