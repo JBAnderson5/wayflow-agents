@@ -49,7 +49,7 @@ def order_intake():
         print(f"Invalid execution status, expected UserMessageRequestStatus, received {type(status)}")
 
 
-    if assistant_reply.content == 'image_to_text':
+    if assistant_reply.content == 'image_to_text_tool':
         # print("It is now image_to_text")
         response = test_image_to_text()
         print(response)
