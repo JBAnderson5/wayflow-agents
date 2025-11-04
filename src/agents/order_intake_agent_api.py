@@ -8,7 +8,8 @@ from wayflowcore.tools import tool
 from wayflowcore.models import OCIGenAIModel
 from src.llm.oci_genai import initialize_llm
 from src.system_prompts.order_intake_agent_prompts import prompt_order_intake_agent
-from src.tools.vision_instruct_tools import test_image_to_text
+from src.tools.vision_instruct_tools import test_image_to_text, image_to_text_tool
+from src.tools.speech_instruct_tools import voice_to_text_tool
 import os
 from fastapi import FastAPI
 
@@ -19,45 +20,11 @@ def order_intake():
 
     llm = initialize_llm()
 
-    ###### Define Wayflow Tools- #########
-
-    @tool(description_mode="only_docstring")
-    def voice_to_text(query: str) -> str:
-        """Tool that is invoked for a audio .mp3 file detailing the order, and returns the tool name.
-
-        Parameters
-        ----------
-        query:
-            file type
-
-        Returns
-        -------
-            tool name
-
-        """
-        return 'voice_to_text'
-
-    @tool(description_mode="only_docstring")
-    def image_to_text(query: str) -> str:
-        """Tool that is invoked for a image .jpg file detailing the order, and returns the tool name.
-
-        Parameters
-        ----------
-        query:
-            file type
-
-        Returns
-        -------
-            tool name
-
-        """
-        return 'image_to_text'
-
     order_intake_agent_instructions = prompt_order_intake_agent.strip()
 
     assistant = Agent(
         custom_instruction=order_intake_agent_instructions,
-        tools=[voice_to_text, image_to_text], 
+        tools=[voice_to_text_tool, image_to_text_tool], 
         llm=llm
     )
 
