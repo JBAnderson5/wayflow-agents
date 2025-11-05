@@ -1,23 +1,17 @@
 # Convert Voice to Text
 from wayflowcore.agent import Agent
-from wayflowcore.executors.executionstatus import (
-    FinishedStatus,
-    UserMessageRequestStatus,
-)
 from wayflowcore.tools import tool
 
+# ---------- tool wrapper ----------
 @tool(description_mode="only_docstring")
-def voice_to_text_tool(query: str) -> str:
-    """Tool that is invoked for a audio .mp3 file detailing the order, and returns the tool name.
-
-    Parameters
-    ----------
-    query:
-        file type
-
-    Returns
-    -------
-        tool name
-
+def voice_to_text(file_path: str, question: str) -> str:
     """
-    return 'voice_to_text_tool'
+    a tool to convert voice to text
+    :param voice_file_path:
+    :param question:
+    :return: JSON string extracted from the voice as per schema
+    """
+    return voice_to_text_impl(file_path, question)
+
+def voice_to_text_impl(file_path: str, question: str) -> str:
+	return ""
