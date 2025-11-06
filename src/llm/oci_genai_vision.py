@@ -7,7 +7,7 @@ import base64
 from langchain_core.messages import HumanMessage
 from src.common.config import *
 
-def initialize_llm():
+def initialize_llm_vision():
     return ChatOCIGenAI(
         model_id=MODEL_ID_VISION,
         service_endpoint=ENDPOINT,
@@ -48,7 +48,7 @@ def test():
         )
     ]
 
-    llm = initialize_llm()
+    llm = initialize_llm_vision()
     response = llm.invoke(messages)
     print(response.content)
 

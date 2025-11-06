@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 # ────────────────────────────────────────────────────────
 THIS_DIR     = Path(__file__).resolve()
 PROJECT_ROOT = THIS_DIR.parent.parent.parent
-load_dotenv(PROJECT_ROOT  / "config/env") # expects OCI_ vars in env
+load_dotenv(PROJECT_ROOT  / "config/.env") # expects OCI_ vars in env
 
 #────────────────────────────────────────────────────────
 # AIDP JDBC Connectivity
