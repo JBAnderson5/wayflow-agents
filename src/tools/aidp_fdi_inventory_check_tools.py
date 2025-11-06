@@ -1,26 +1,41 @@
 # src/tools/aidp_inventory_check_tool.py
 import os
-from multiprocessing import Process, Queue, set_start_method
+from multiprocessing import Process, Queue
 from wayflowcore.agent import Agent
 from wayflowcore.tools import tool
-from wayflowcore.executors.executionstatus import (
-    FinishedStatus,
-    UserMessageRequestStatus,
+from wayflowcore.executors.executionstatus import UserMessageRequestStatus
+from typing import List
+
+from src.common.config import (
+    PROJECT_ROOT, JDBC_DRIVER_CLASS_NAME, JDBC_URL, AUTH_TYPE,
+    OCI_CONFIG_FILE, CONFIG_PROFILE
 )
-from src.common.config import *
 
 # ---------- child worker (runs JPype + JDBC in separate process) ----------
-def _jdbc_worker(item_number: str, item_required_quantity: int, bu: str, q):
+def _jdbc_worker(item_numbers: List[str], item_required_quantities: List[int], bu: str, q) -> None:
     """
-    Child process that does the JDBC call. Returns 'Yes'/'No' or 'Error: ...' via Queue.
+    item_numbers: list[str]
+    item_required_quantities: list[int]  (same length as item_numbers)
+    bu: str
+    q: multiprocessing.Queue  -> puts a list[dict] or 'Error: ...'
     """
-    import os, sys
-    import jpype
-    import jaydebeapi
+    import os, json
+    import jpype, jaydebeapi
 
     try:
-        # 1) Resolve absolute jar path(s)
-        #    Name may be 'SparkJDBC42.jar' or 'SimbaSparkJDBC42.jar' – use what you actually have.
+        # validate inputs
+        if not isinstance(item_numbers, (list, tuple)) or not item_numbers:
+            q.put("Error: item_numbers must be a non-empty list")
+            return
+        if not isinstance(item_required_quantities, (list, tuple)) or \
+           len(item_required_quantities) != len(item_numbers):
+            q.put("Error: item_required_quantity must be a list with same length as item_numbers")
+            return
+        if not isinstance(bu, str) or not bu.strip():
+            q.put("Error: bu must be a non-empty string")
+            return
+
+        # locate jar(s)
         JAR_CANDIDATES = [
             os.path.join(PROJECT_ROOT, "config", "SparkJDBC42.jar"),
             os.path.join(PROJECT_ROOT, "config", "SimbaSparkJDBC42.jar"),
@@ -30,29 +45,24 @@ def _jdbc_worker(item_number: str, item_required_quantity: int, bu: str, q):
             q.put("Error: JDBC jar not found at expected locations: " + ", ".join(JAR_CANDIDATES))
             return
 
-        # 2) Start JVM with explicit classpath
+        # start JVM with explicit classpath
         if not jpype.isJVMStarted():
-            # Use classpath=[...] so JPype builds -Djava.class.path for you
             jpype.startJVM(convertStrings=True, classpath=jars)
 
-        # 3) Sanity check: can we load the driver class?
-        #    Simba driver class is usually exactly this:
+        # sanity check driver
         DRIVER_CLASS = "com.simba.spark.jdbc.Driver"
         try:
             _ = jpype.JClass(DRIVER_CLASS)
         except Exception as e:
-            q.put(f"Error: Driver class '{DRIVER_CLASS}' not found on classpath. "
-                  f"Classpath={os.pathsep.join(jars)}. Detail: {e}")
+            q.put(f"Error: Driver class '{DRIVER_CLASS}' not found on classpath ({os.pathsep.join(jars)}): {e}")
             return
 
-        # 4) Open connection
+        # connect
         props = {
             "oracle.jdbc.authenticationMethod": AUTH_TYPE,
             "oracle.jdbc.oci.config.file": OCI_CONFIG_FILE,
             "oracle.jdbc.oci.profile.name": CONFIG_PROFILE,
         }
-
-        # With JVM classpath set, the 'jars' arg is optional, but harmless if you include it.
         conn = jaydebeapi.connect(DRIVER_CLASS, JDBC_URL, props, jars)
 
         try:
@@ -62,49 +72,86 @@ def _jdbc_worker(item_number: str, item_required_quantity: int, bu: str, q):
                 q.put(f"Error: SQL file not found: {sql_path}")
                 return
 
-            with open(sql_path, "r") as f:
-                sql_script = f.read()
+            sql_template = open(sql_path, "r").read()
 
-            # Bind params as a tuple
-            cur.execute(sql_script, (item_number, bu))
+            # Build IN list placeholders and finalize SQL.
+            # SQL file must contain:  ... item.item_number IN ({items}) ... AND bu.business_unit_name = ?
+            placeholders = ", ".join(["?"] * len(item_numbers))
+            if "{items}" not in sql_template:
+                q.put("Error: SQL template must contain a {items} token for the IN list")
+                return
+            sql = sql_template.format(items=placeholders)
+
+            # Params: all item_numbers first (for IN list), then BU (for the trailing '?')
+            params = tuple(item_numbers) + (bu,)
+
+            cur.execute(sql, params)
             rows = cur.fetchall()
         finally:
-            try:
-                cur.close()
-            except Exception:
-                pass
-            try:
-                conn.close()
-            except Exception:
-                pass
+            try: cur.close()
+            except Exception: pass
+            try: conn.close()
+            except Exception: pass
 
-        available = int(rows[0][0]) if rows and rows[0] and rows[0][0] is not None else 0
-        print(f"--------\nQuantity available in DB >>> {available}\n--------")
-        q.put("Yes" if available >= int(item_required_quantity) else "No")
+        # rows expected as: (available_quantity, item_number, org_code, org_id, subinv, bu_name)
+        # Build a map for quick lookup by item_number
+        qty_by_item = {}
+        for r in rows or []:
+            try:
+                qty_by_item[str(r[1])] = int(r[0]) if r[0] is not None else 0
+            except Exception:
+                # fallback if types are odd
+                qty_by_item[str(r[1])] = int(float(r[0])) if r and r[0] is not None else 0
+
+        result = []
+        for i, it in enumerate(item_numbers):
+            available = qty_by_item.get(str(it), 0)
+            required = int(item_required_quantities[i])
+            result.append({
+                "item_number": str(it),
+                "available_quantity": int(available),
+                "required_quantity": required,
+                "is_available": "Yes" if available >= required else "No",
+                "business_unit": bu
+            })
+
+        q.put(json.dumps(result))  # return JSON string (Wayflow tools usually return str)
 
     except Exception as e:
         q.put(f"Error: {e}")
     finally:
-        # We still terminate the child process from the parent,
-        # but shutting down here is harmless if it succeeded.
         try:
             if jpype.isJVMStarted():
                 jpype.shutdownJVM()
         except Exception:
             pass
 
-
 # ---------- tool wrapper (calls child process, then kills it) ----------
 @tool(description_mode="only_docstring")
-def aidp_fdi_inventory_check(item_number: str, item_required_quantity: int, bu: str, question: str) -> str:
-    """
-    Check in FDI using AIDP - whether item availability is more than the required quantity.
-    Returns ONLY 'Yes' or 'No'.
+def aidp_fdi_inventory_check(
+    item_numbers: List[str],
+    item_required_quantity: List[int],
+    bu: str,
+    question: str,
+) -> str:
+    """Check item availability in FDI using AIDP for a LIST of item_numbers.
+
+    Parameters
+    ----------
+    :param item_numbers: List[str]
+    :param item_required_quantity: List[int]
+    :param bu: str
+    :param question: 
+
+    Returns
+    -------
+        a JSON array with: [{ "item_number": "...", "available_quantity": int, "required_quantity": int, "is_available": "Yes|No"}]
+
     """
     q = Queue()
-    p = Process(target=_jdbc_worker, args=(item_number, item_required_quantity, bu, q), daemon=False)
+    p = Process(target=_jdbc_worker, args=(item_numbers, item_required_quantity, bu, q), daemon=False)
     p.start()
-    p.join(timeout=30)  # adjust if your query is slower
+    p.join(timeout=60)
 
     if p.is_alive():
         p.terminate()
@@ -115,6 +162,8 @@ def aidp_fdi_inventory_check(item_number: str, item_required_quantity: int, bu: 
     except Exception:
         return "Error: JDBC worker timed out"
 
+
+
 # ---------- quick test ----------
 def test():
     from src.llm.oci_genai import initialize_llm
@@ -122,37 +171,29 @@ def test():
 
     assistant = Agent(
         custom_instruction="Check item inventory",
-        tools=[aidp_fdi_inventory_check], 
+        tools=[aidp_fdi_inventory_check],
         llm=llm
     )
 
-    item_number = "AS6647431"
-    item_required_quantity = 2000
-    bu = "US1 Business Unit"   
-    question = (
-        "Check the available_quantity returned by the tool\n"
-        "If available_quantity is more than item_required_quantity, then respond Yes \n"
-        "If available_quantity is less than item_required_quantity, then respond No \n"
-        "Return only Yes or No \n"
-    )   
-
-    print(f"--------\nItem Number >>> {item_number}\n--------")
-    print(f"--------\nQuantity requested >>> {item_required_quantity}\n--------")
-
-    # print(aidp_fdi_inventory_check_impl(item_number=item_number, item_required_quantity=item_required_quantity, bu=bu, question=question)) 
+    item_numbers = ['AS6647431', 'AS6647432', 'AS6647433']
+    item_required_quantity = [2000, 1000, 5000]
+    bu = "US1 Business Unit"
+    question = "Return per-item availability."
 
     convo = assistant.start_conversation()
-    user_msg = f"item_number: {item_number}\nitem_required_quantity: {item_required_quantity}\nbu: {bu}\nquestion: {question}"
+    # Keep the user message explicit so the agent/tool router has zero ambiguity
+    user_msg = (
+        f"aidp_fdi_inventory_check(item_numbers={item_numbers}, "
+        f"item_required_quantity={item_required_quantity}, bu='{bu}', question='{question}')"
+    )
     convo.append_user_message(user_msg)
     status = convo.execute()
 
     print("Final Output")
-
     if isinstance(status, UserMessageRequestStatus):
-        assistant_reply = convo.get_last_message()
-        print(f"---\nAIDP Inventory Available? >>> {assistant_reply.content}\n---")
+        print(f"---\nResult >>> {convo.get_last_message().content}\n---")
     else:
-        print(f"Invalid execution status, expected UserMessageRequestStatus, received {type(status)}")
+        print(f"---\nResult >>> {convo.get_last_message().content}\n---")
 
 if __name__ == "__main__":
     test()
