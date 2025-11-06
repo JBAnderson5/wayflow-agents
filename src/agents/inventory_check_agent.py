@@ -27,26 +27,23 @@ def inventory_check_agent(user_msg: str):
     conversation.append_user_message(user_msg)
     status = conversation.execute()
 
-    print("Agent Output")
-
     if isinstance(status, UserMessageRequestStatus):
         assistant_reply = conversation.get_last_message()
-        print(f"---\nAIDP Inventory Available? >>> {assistant_reply.content}\n---")
     else:
         assistant_reply = f"Invalid execution status, expected UserMessageRequestStatus, received {type(status)}"
         print(f"Invalid execution status, expected UserMessageRequestStatus, received {type(status)}")
 
-    return assistant_reply
+    return assistant_reply.content
 
 def unit_test():
     item_numbers = ['AS6647431', 'AS6647432', 'AS6647433']
-    item_required_quantity = [2000, 1000, 500]
+    item_required_quantity = [2000, 1000, 5000]
     bu = "US1 Business Unit"
     question = "Return per-item availability."
     user_msg = f"item_numbers: {item_numbers}\nitem_required_quantity: {item_required_quantity}\nbu: {bu}\nquestion: {question}"
     
     response = inventory_check_agent(user_msg)
-    print(f"Agent Output : {response}" )
+    print(f"---\nAgent Output : {response}\n---" )
 
 
 if __name__ == "__main__":

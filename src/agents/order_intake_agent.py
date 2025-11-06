@@ -1,6 +1,10 @@
 
 from wayflowcore.agent import Agent
 from wayflowcore.tools import tool
+from wayflowcore.executors.executionstatus import (
+    FinishedStatus,
+    UserMessageRequestStatus,
+)
 from wayflowcore.models import OCIGenAIModel
 from src.llm.oci_genai import initialize_llm
 from src.system_prompts.order_intake_agent_prompts import prompt_order_intake_agent
@@ -9,7 +13,7 @@ from src.tools.speech_instruct_tools import voice_to_text
 import os
 from pathlib import Path
 
-def order_intake():
+def order_intake(user_msg: str):
 
     llm = initialize_llm()
 
@@ -21,6 +25,19 @@ def order_intake():
         llm=llm
     )    
 
+    conversation = assistant.start_conversation()
+    conversation.append_user_message(user_msg)
+    status = conversation.execute()
+
+    if isinstance(status, UserMessageRequestStatus):
+        assistant_reply = conversation.get_last_message()
+    else:
+        assistant_reply = f"Invalid execution status, expected UserMessageRequestStatus, received {type(status)}"
+        print(f"Invalid execution status, expected UserMessageRequestStatus, received {type(status)}")
+
+    return assistant_reply.content
+
+def unit_test():
     THIS_DIR = Path(__file__).resolve()
     PROJECT_ROOT = THIS_DIR.parent.parent.parent
     file_path = f"{PROJECT_ROOT}/order_inputs/orderhub_handwritten.jpg"
@@ -30,14 +47,11 @@ def order_intake():
         "OrderItems - Item: {}, Quantity: {}, RequestedDate: {}\n"
         "Return only JSON."
     )
-
-    conversation = assistant.start_conversation()
     user_msg = f"file_path: {file_path}\nquestion: {question}"
-    conversation.append_user_message(user_msg)
-    conversation.execute()
+    
+    response = order_intake(user_msg)
+    print(f"---\nAgent Output : {response}\n---" )
 
-    assistant_response = conversation.get_last_message()
-    print(assistant_response.content)
 
 if __name__ == "__main__":
-    order_intake()
+    unit_test()
