@@ -17,7 +17,7 @@ def inventory_check_agent(user_msg: str):
     llm = initialize_llm()
 
     assistant = Agent(
-        custom_instruction="Check item inventory for the provided list of item_numbers, list of item_required_quantity, and bu.",
+        custom_instruction="Check item inventory for the provided list of item_numbers, list of item_required_quantity, and bu. Respond ONLY JSON with proper line breaks",
         tools=[aidp_fdi_inventory_check], 
         llm=llm
     )
@@ -43,7 +43,7 @@ def unit_test():
     user_msg = f"item_numbers: {item_numbers}\nitem_required_quantity: {item_required_quantity}\nbu: {bu}\nquestion: {question}"
     
     response = inventory_check_agent(user_msg)
-    print(f"---\nAgent Output : {response}\n---" )
+    print(f"---\nAgent JSON Output :\n {response}\n---" )
 
 
 if __name__ == "__main__":

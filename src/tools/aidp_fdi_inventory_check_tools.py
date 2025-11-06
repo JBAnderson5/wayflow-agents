@@ -1,4 +1,4 @@
-# src/tools/aidp_inventory_check_tool.py
+# src/tools/aidp_fdi_inventory_check_tools.py
 import os
 from multiprocessing import Process, Queue
 from wayflowcore.agent import Agent
@@ -170,7 +170,7 @@ def test():
     llm = initialize_llm()
 
     assistant = Agent(
-        custom_instruction="Check item inventory",
+        custom_instruction="Check item inventory for the provided list of item_numbers, list of item_required_quantity, and bu. Respond ONLY JSON with proper line breaks",
         tools=[aidp_fdi_inventory_check],
         llm=llm
     )
@@ -191,9 +191,10 @@ def test():
 
     print("Final Output")
     if isinstance(status, UserMessageRequestStatus):
-        print(f"---\nResult >>> {convo.get_last_message().content}\n---")
+        print(f"---\nJSON >>> \n {convo.get_last_message().content}\n---")
     else:
-        print(f"---\nResult >>> {convo.get_last_message().content}\n---")
+        assistant_reply = f"Invalid execution status, expected UserMessageRequestStatus, received {type(status)}"
+        print(f"Invalid execution status, expected UserMessageRequestStatus, received {type(status)}")
 
 if __name__ == "__main__":
     test()
