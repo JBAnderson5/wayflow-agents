@@ -1,4 +1,3 @@
-
 from wayflowcore.agent import Agent
 from wayflowcore.executors.executionstatus import (
     FinishedStatus,
@@ -7,56 +6,42 @@ from wayflowcore.executors.executionstatus import (
 from wayflowcore.tools import tool
 from wayflowcore.models import OCIGenAIModel
 from src.llm.oci_genai import initialize_llm
-from src.common.config import *
-import os
-import jaydebeapi
-import jpype
+from src.tools.aidp_fdi_inventory_check_tools import aidp_fdi_inventory_check
 
-def inventory_check():
+import re
+from typing import List, Dict, Any
 
-    JDBC_DRIVER_PATH = f"{PROJECT_ROOT}/config/SparkJDBC42.jar"
+def inventory_check_agent(user_msg: str):
 
-    SQL_PATH = f"{PROJECT_ROOT}/config/inventory_check3.sql"
+    llm = initialize_llm()
 
-    connection_properties = {
-        "oracle.jdbc.authenticationMethod": AUTH_TYPE, 
-        "oracle.jdbc.oci.config.file": OCI_CONFIG_FILE,
-        "oracle.jdbc.oci.profile.name": CONFIG_PROFILE
-    }
+    assistant = Agent(
+        custom_instruction="Check item inventory for the provided list of item_numbers, list of item_required_quantity, and bu. Respond ONLY JSON with proper line breaks",
+        tools=[aidp_fdi_inventory_check], 
+        llm=llm
+    )
 
-    try:
+    conversation = assistant.start_conversation()
+    #user_msg = f"item_numbers: {item_numbers}\nitem_required_quantity: {item_required_quantity}\nbu: {bu}\nquestion: {question}"
+    conversation.append_user_message(user_msg)
+    status = conversation.execute()
 
-        conn = jaydebeapi.connect(
-            JDBC_DRIVER_CLASS_NAME,
-            JDBC_URL,
-            connection_properties, 
-            JDBC_DRIVER_PATH
-        )
+    if isinstance(status, UserMessageRequestStatus):
+        assistant_reply = conversation.get_last_message()
+    else:
+        assistant_reply = f"Invalid execution status, expected UserMessageRequestStatus, received {type(status)}"
+        print(f"Invalid execution status, expected UserMessageRequestStatus, received {type(status)}")
 
-        cursor = conn.cursor()
+    return assistant_reply.content
 
-        # Execute SQL queries
-        with open(SQL_PATH, "r") as f:
-            sql_script = f.read()
-        item_number = "AS6647431"
-        bu = "US1 Business Unit"
-        parameters = [
-            (item_number, bu)
-        ]
-        cursor.execute(sql_script, parameters[0])
-        results = cursor.fetchall()
-        print("AIDP Output")
-        print(results)
-
-    except jaydebeapi.Error as e:
-        print(f"Error connecting to database: {e}")
-
-    finally:
-        if 'cursor' in locals() and cursor:
-            cursor.close()
-        if 'conn' in locals() and conn:
-            conn.close()
+def unit_test():
+    item_numbers = ['AS6647431', 'AS6647432', 'AS6647433']
+    item_required_quantity = [2000, 1000, 5000]
+    bu = "US1 Business Unit"
+    user_msg = f"Return per-item availability for item_numbers: {item_numbers}, item_required_quantity: {item_required_quantity} and bu: {bu}"
+    response = inventory_check_agent(user_msg)
+    print(f"Agent Output : {response}" )
 
 
 if __name__ == "__main__":
-    inventory_check()
+    unit_test()
