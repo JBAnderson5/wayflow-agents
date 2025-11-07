@@ -22,7 +22,6 @@ def inventory_check_agent(user_msg: str):
     )
 
     conversation = assistant.start_conversation()
-    #user_msg = f"item_numbers: {item_numbers}\nitem_required_quantity: {item_required_quantity}\nbu: {bu}\nquestion: {question}"
     conversation.append_user_message(user_msg)
     status = conversation.execute()
 
