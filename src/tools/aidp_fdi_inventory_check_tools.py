@@ -162,11 +162,7 @@ def test():
     llm = initialize_llm()
 
     assistant = Agent(
-<<<<<<< HEAD
-        custom_instruction="Check item inventory for the provided list of item_numbers, list of item_required_quantity, and bu. Respond ONLY JSON with proper line breaks",
-=======
         custom_instruction="Check item inventory",
->>>>>>> 6661c605c1e72b47d386e5abf4fcc58728fb93da
         tools=[aidp_fdi_inventory_check],
         llm=llm
     )
@@ -187,16 +183,9 @@ def test():
 
     print("Final Output")
     if isinstance(status, UserMessageRequestStatus):
-<<<<<<< HEAD
-        print(f"---\nJSON >>> \n {convo.get_last_message().content}\n---")
-    else:
-        assistant_reply = f"Invalid execution status, expected UserMessageRequestStatus, received {type(status)}"
-        print(f"Invalid execution status, expected UserMessageRequestStatus, received {type(status)}")
-=======
         print(f"---\nResult >>> {convo.get_last_message().content}\n---")
     else:
         print(f"---\nResult >>> {convo.get_last_message().content}\n---")
->>>>>>> 6661c605c1e72b47d386e5abf4fcc58728fb93da
 
 if __name__ == "__main__":
     test()
