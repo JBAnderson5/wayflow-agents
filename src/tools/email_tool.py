@@ -95,11 +95,12 @@ def test():
 
     convo = assistant.start_conversation()
     # Keep the user message explicit so the agent/tool router has zero ambiguity
-    user_msg = (
-        f"to: ops@example.com",
-         f"subject : Order has been created",
-         f"body: Order has been created for item_numbers {item_numbers}.",
-    )
+    user_msg = "\n".join([
+        "send an email -",
+        "to: ops@example.com",
+        "subject: Order has been created",
+        f"body: Order has been created for item_numbers {item_numbers}.",
+    ])
 
 
     convo.append_user_message(user_msg)

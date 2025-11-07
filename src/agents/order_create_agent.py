@@ -10,7 +10,7 @@ from src.llm.oci_genai import initialize_llm
 from src.tools.order_create_tools import create_order
 from src.tools.email_tool import send_email_dummy
 
-def order_create_intake(user_msg: str):
+def order_create_agent(user_msg: str):
 
     llm = initialize_llm()
 
@@ -46,19 +46,23 @@ def unit_test():
         "body": "bar",
         "userId": 1,
     }
-    user_msg = f"payload: {payload}"
-    response = order_create_intake(user_msg)
+
+    user_msg = f"Create a sales order in Oracle SCM using a properly structured JSON payload.: /n   {payload}"
+    response = order_create_agent(user_msg)
     print(f"Agent Output : {response}")
 
     # send email 
 
-    user_msg1 = (
-        f"to: ops@example.com",
-        f"subject : Order has been created",
-        f"body: {response}",
-    )
-
-    response1 = order_create_intake(user_msg1)
+    payload1 = """{
+        "action": "send_email",
+        "email_to": "ops@example.com",
+        "subject": "Order has been created",
+        "note": "Order has been created for item_numbers AS6647431, AS6647432."
+    }"""
+    user_msg1 = f"Send an Email following instructions in this payload /n   {payload1}"
+    
+    print(user_msg1)
+    response1 = order_create_agent(user_msg1)
     print(f"Agent Output Email: {response1}")
 
 
